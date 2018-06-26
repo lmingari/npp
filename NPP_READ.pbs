@@ -1,0 +1,17 @@
+#!/bin/bash                                                                       
+#PBS -q share                                                                      
+#PBS -A UIUC0012                                                                   
+#PBS -N NPP_WRITE_READ                                                                  
+#PBS -m n                                                                          
+#PBS -l walltime=01:00:00                                                          
+#PBS -j oe                                                                         
+#PBS -o log_read_gs.out                                                                    
+#PBS -V                                                                            
+#PBS -l select=1:ncpus=5
+
+source /etc/profile.d/modules.sh
+module load ncl
+
+export BASEDIR=/glade/scratch/mdillion/EXP/RRA_02/
+
+python read_par_fc.py
