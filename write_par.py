@@ -32,8 +32,8 @@ t2 = datetime(2017,9,27,23)
 #  scripts.append(args+NCL_WRT_GS)
 
 fc_hours = range(0,19)
-t1 = datetime(2017,9,25,0)
-t2 = datetime(2017,9,27,0)
+t1 = datetime(2017,9,26,18)
+t2 = datetime(2017,9,26,18)
 dt = timedelta(hours=3)
 for item in datetimeIterator(from_date=t1, to_date=t2, delta=dt):
   args = item.strftime(fmt).split()

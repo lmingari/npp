@@ -39,8 +39,8 @@ begin
 
 ;---Open workstation
   wks_type = "png"
-  ;wks_type@wkPaperHeightF = 40
-  ;wks_type@wkPaperWidthF  = 57
+  wks_type@wkHeight = 1024
+  wks_type@wkWidth  = 900
   wks = gsn_open_wks(wks_type,path_out+fname+"_"+varname+"_th"+threshold)
 
 ;---Set some common resources
@@ -60,6 +60,7 @@ begin
   map_res                   = True
   map_res@gsnDraw           = False
   map_res@gsnFrame          = False
+  map_res@gsnMaximize       = True
 
 ;---Set map resources based on projection on NPP output file
   map_res@mpProjection                = "LambertConformal"
@@ -103,8 +104,10 @@ begin
 
   map_res@pmTickMarkDisplayMode       = "Always"
 
-  map_res@tiMainString                = "Ensemble probability of exceedance diagram"
+  map_res@tiMainString                = "Ensemble Probability of Exceedance"
   map_res@gsnCenterString             = "6-h Accumulated Precipitation > " + threshold + " mm"
+;  map_res@tiMainFontHeightF           = 0.015
+  map_res@gsnCenterStringFontHeightF  = 0.015
 
 ;---Color Palette
 ;  cmap = read_colormap_file("MPL_RdYlBu")
