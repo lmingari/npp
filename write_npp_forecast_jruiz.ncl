@@ -56,6 +56,16 @@ begin
 ;---List of WRF output files
   nfiles    = 60
   dd        = ispan(1,nfiles,1)  
+;----
+;Parche: to be removed !!
+;---
+  dd(19) = 19
+  dd(39) = 39
+  dd(59) = 59
+  print(dd)
+;---
+;
+;---
   files     = BASEDIR + "FCST/" + \
               path_in + \
               sprinti("%0.5i/", dd) + \

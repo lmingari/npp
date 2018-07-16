@@ -1,7 +1,7 @@
 load "ensambleWRF.ncl"
 
 /;
-Genera mapas de todos los miembros del ensamble
+Genera un unico mapa de un miembro del ensamble
 para una dada variable de superficie
 Inputs:
    1. varname:
@@ -18,8 +18,10 @@ Inputs:
       hf>=0        -> Forecast file
       hf<0         -> Guess file
       hf undefined -> Analysis file
-   4. BASEDIR (Environment variable)
+   4. im (ensamble member)
+   5. BASEDIR (Environment variable)
 ;/
+
 
 begin
   start_cpu_time = get_cpu_time()
@@ -53,6 +55,12 @@ begin
   end if
   print("Working with forecast file " + fname)
 
+;---Ensamble member
+  if(.not.isvar("im")) then
+    im = 0
+    print("im not defined, assuming " + im)
+  end if
+
 ;---Root directory
   BASEDIR = getenv("BASEDIR")
   if(ismissing(BASEDIR)) then
@@ -62,17 +70,12 @@ begin
   path     = BASEDIR + "POST/NPP/"
   path_out = BASEDIR + "POST/PLOT/"
 
-;---Number of rows?
-  nrows    = 5
-
 ;---Open files using addfiles
   f = addfile(path+fname+".nc","r")
 
 ;---Open workstation
-  wks_type = "pdf"
-  wks_type@wkPaperHeightF = 40
-  wks_type@wkPaperWidthF  = 57
-  wks = gsn_open_wks(wks_type,path_out+fname+"_panelx60_"+varname)
+  wks_type = "png"
+  wks = gsn_open_wks(wks_type,path_out+fname+"_single_"+varname)
 
 ;---Set some common resources
   res                       = True
@@ -91,7 +94,7 @@ begin
   map_res                   = True
   map_res@gsnDraw           = False
   map_res@gsnFrame          = False
-  map_resourcesx60(f,map_res)
+  map_resourcesx1(f,map_res)
 
 ;---CONTOUR filled contour plot
   con_res                             = res
@@ -101,29 +104,21 @@ begin
   con_res@cnInfoLabelOn               = False
 
   con_res@cnLevelSelectionMode        = "ManualLevels"
-  con_res@lbLabelBarOn                = False
   contour_resources(varname,con_res)
+  
+  con_res@lbLabelBarOn                = True
+  con_res@lbOrientation               = "Vertical"
+  con_res@lbTitleDirection            = "Across"
+  con_res@lbTitleAngleF               = 90
+  con_res@lbTitlePosition             = "Right"
+  con_res@lbTitleFontHeightF          = 0.02
+  con_res@lbLabelFontHeightF          = 0.015
+  labelbar_resources(varname,con_res)
 
-;---Panel resources
-  pnlres                              = True
-  pnlres@gsnPanelMainString           = ""
-  pnlres@gsnPanelLabelBar             = True
-
-  pnlres@lbLabelBarOn                 = True  
-  pnlres@lbTitleFontHeightF           = 0.015
-  pnlres@lbLabelFontHeightF           = 0.01
-
-  pnlres@pmLabelBarWidthF             = 0.35
-  pnlres@pmLabelBarHeightF            = 0.07
-  pnlres@pmLabelBarOrthogonalPosF     = -0.02
-  pnlres@gsnPanelRight                = 0.992
-  pnlres@gsnPanelDebug                = False
-
-  pnlres@gsnMaximize                  = True
-  pnlres@gsnPaperMargin               = 0.1
-  pnlres@gsnPaperOrientation          = "portrait"
-
-  labelbar_resources(varname,pnlres)
+;---Section to add polylines to map.
+  lnres                  = True           ; resource list for polylines
+  lnres@gsLineColor      = "gray50"
+  lnres@gsLineThicknessF = 1.0
 
 ;---Get variables to be read
   ;print("Working for variable: " + varname)
@@ -148,63 +143,16 @@ begin
     data = data - 273.15
   end if
 
-  dims = dimsizes(data)
-  nm   = dims(0)
-  ny   = dims(1)
-  nx   = dims(2)
+  print("Working for member " + im)
+  map     = gsn_csm_map(wks,map_res)  
+  contour = gsn_csm_contour(wks,data(im,:,:),con_res)
+  id      = gsn_add_shapefile_polylines(wks,map,"interprovincial/interprovinciales.shp",lnres)
 
-  ncols   = nm/nrows
-  if(nm%nrows .gt. 0) then
-    ncols = ncols + 1
-  end if
-    
-  map     = new(nm,graphic)
-  contour = new(nm,graphic)
+  ;---Overlay plots on map and draw.
+  overlay(map,contour)
 
-;---Loop through each member and draw a panel
-  do it=0,nm-1
-    ;print("Working for member " + it)
-
-    if (it .lt. ncols) then
-      map_res@tmXTLabelsOn = True            
-      map_res@tmXTOn       = True
-    else
-      map_res@tmXTLabelsOn = False           
-      map_res@tmXTOn       = False
-    end if
-
-    if (it .ge. ncols*(nrows-1)) then
-      map_res@tmXBLabelsOn = True            
-      map_res@tmXBOn       = True            
-    else
-      map_res@tmXBLabelsOn = False           
-      map_res@tmXBOn       = False
-    end if
-
-    if (it%ncols .eq. 0) then
-      map_res@tmYLLabelsOn = True
-      map_res@tmYLOn       = True
-    else
-      map_res@tmYLLabelsOn = False
-      map_res@tmYLOn       = False
-    end if
-
-    if (it%ncols .eq. ncols-1 .or. it .eq. nm-1) then
-      map_res@tmYRLabelsOn = True
-      map_res@tmYROn       = True
-    else
-      map_res@tmYRLabelsOn = False
-      map_res@tmYROn       = False
-    end if
-    
-    map(it)     = gsn_csm_map(wks,map_res)  
-    contour(it) = gsn_csm_contour(wks,data(it,:,:),con_res)
-
-    ;---Overlay plots on map and draw.
-    overlay(map(it),contour(it))
-  end do
-
-  gsn_panel(wks,map,(/nrows,ncols/),pnlres)
+  draw(map)
+  frame(wks)
  
   end_cpu_time = get_cpu_time()
   print(get_script_prefix_name() + " for " +varname+ ": elapsed time = " + (end_cpu_time-start_cpu_time) + " seconds.")

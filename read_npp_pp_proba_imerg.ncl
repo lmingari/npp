@@ -1,3 +1,5 @@
+load "./LoadIMERG.ncl"
+
 begin
   start_cpu_time = get_cpu_time()
 
@@ -46,7 +48,7 @@ begin
 
 ;---Open workstation
   wks_type = "png"
-  wks      = gsn_open_wks(wks_type,path_out+fname+"_"+varname+"_th"+threshold)
+  wks      = gsn_open_wks(wks_type,path_out+fname+"_"+varname+"_th"+threshold+"_imerg")
 
 ;---Set some common resources
   res                       = True
@@ -65,7 +67,7 @@ begin
   map_res                   = True
   map_res@gsnDraw           = False
   map_res@gsnFrame          = False
-  map_res@gsnMaximize       = True
+  map_res@gsnMaximize       = False
 
 ;---Set map resources based on projection on NPP output file
   map_res@mpProjection                = "LambertConformal"
@@ -147,6 +149,22 @@ begin
   ; con_res@pmLabelBarHeightF            = 0.07
   ; con_res@pmLabelBarOrthogonalPosF     = -0.02
 
+;---CONTOUR for IMERG
+  con_asc                             = res
+  con_asc@tfDoNDCOverlay              = False
+
+  con_asc@cnFillOn                    = False
+  con_asc@cnLinesOn                   = True
+  con_asc@cnLineLabelsOn              = True
+
+  con_asc@cnInfoLabelOn               = True
+  con_asc@cnInfoLabelString           = "Contour Lines: IMERG"
+
+  con_asc@cnLevelSelectionMode        = "ExplicitLevels"
+  con_asc@cnLevels                    = (/ threshold /)
+  con_asc@cnLineColor                 = "red"
+  con_asc@cnLineThicknessF            = 2.0
+
 ;---Section to add polylines to map.
   lnres                  = True           ; resource list for polylines
   lnres@gsLineColor      = "gray50"
@@ -167,12 +185,18 @@ begin
 
   proba   = 100.0*dim_num_n(data.ge.threshold,0)/nm
 
+;---Get IEMRG ASCII data
+  fname_ascii = "IMERG_FR_201709261800-201709270000.txt"
+  data_asc    = LoadIMERG(fname_ascii)
+
   map         = gsn_csm_map(wks,map_res)
   contour     = gsn_csm_contour(wks,proba,con_res)
+  contour_asc = gsn_csm_contour(wks,data_asc,con_asc)
   id          = gsn_add_shapefile_polylines(wks,map,"interprovincial/interprovinciales.shp",lnres)
 
   ;---Overlay plots on map and draw.
   overlay(map,contour)
+  overlay(map,contour_asc)
 
   draw(map)
   frame(wks)
