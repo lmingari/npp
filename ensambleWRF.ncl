@@ -1,58 +1,210 @@
 
 ;--------------------------------------------------------------------------------
+; Get NPP data
+;--------------------------------------------------------------------------------
+undef ("get_NPP_data")
+function get_NPP_data(nc_file[1]:file, variable_name[1]:string, iz[1]:integer)
+local data, U, V
+begin
+
+  if(iz.ge.0) then
+
+    if(variable_name.eq."SPD") then
+      if (getfilevartypes(nc_file,"U").eq."short") then
+        U = short2flt( nc_file->U(:,iz,:,:) )
+        V = short2flt( nc_file->V(:,iz,:,:) )
+      else
+        U = nc_file->U(:,iz,:,:)
+        V = nc_file->V(:,iz,:,:)
+      end if
+      data = sqrt(U^2+V^2)
+      copy_VarMeta(U, data)
+      data@long_name = "Wind Speed"
+    else
+      if (getfilevartypes(nc_file,variable_name).eq."short") then
+        data = short2flt( nc_file->$variable_name$(:,iz,:,:) )
+      else
+        data = nc_file->$variable_name$(:,iz,:,:)
+      end if
+    end if
+
+  else
+
+    if(variable_name.eq."SPD10") then
+      if (getfilevartypes(nc_file,"U10").eq."short") then
+        U = short2flt( nc_file->U10 )
+        V = short2flt( nc_file->V10 )
+      else
+        U = nc_file->U10
+        V = nc_file->V10
+      end if
+      data = sqrt(U^2+V^2)
+      copy_VarMeta(U, data)
+      data@long_name = "Wind Speed at 10m"
+    else
+      if (getfilevartypes(nc_file,variable_name).eq."short") then
+        data = short2flt( nc_file->$variable_name$ )
+      else
+        data = nc_file->$variable_name$
+      end if
+    end if
+
+  end if
+
+  if(variable_name.eq."T2" .or. variable_name.eq."T") then
+    data = data - 273.15
+    data@unit = "C"
+  end if
+
+  return(data)
+end
+;--------------------------------------------------------------------------------
+
+;--------------------------------------------------------------------------------
 ; Set Resources for filled contour
 ;--------------------------------------------------------------------------------
 undef("contour_resources")
-procedure contour_resources(variable_name[1]:string, opt_arg[1]:logical)
+procedure contour_resources(variable_name[1]:string, pressure[1]:numeric, opt_arg[1]:logical)
 local cmap
 begin
 
-  if( any( variable_name .eq. (/"MDBZ","REFL1KM","REFL4KM"/) ) ) then
-    cmap = read_colormap_file("./palettes/radar_new.rgb")
+  if(pressure.gt.0) then
 
-    opt_arg@cnRasterModeOn  = True
-    opt_arg@cnMinLevelValF  = -25
-    opt_arg@cnMaxLevelValF  = 70
-    opt_arg@cnLevelSpacingF = 5.0
-    opt_arg@cnFillPalette   = cmap
+    if(variable_name.eq."Q") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      if(pressure.le.500) then  
+        opt_arg@cnMinLevelValF  = 0.25
+        opt_arg@cnMaxLevelValF  = 4
+        opt_arg@cnLevelSpacingF = 0.25
+      else
+        opt_arg@cnMinLevelValF  = 3
+        opt_arg@cnMaxLevelValF  = 16
+        opt_arg@cnLevelSpacingF = 1
+      end if
+    end if
+
+    if(variable_name.eq."SPD") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      if(pressure.lt.500) then
+        opt_arg@cnMinLevelValF  = 30
+        opt_arg@cnMaxLevelValF  = 50
+        opt_arg@cnLevelSpacingF = 2
+      else if(pressure.le.850) then
+        opt_arg@cnMinLevelValF  = 2
+        opt_arg@cnMaxLevelValF  = 26
+        opt_arg@cnLevelSpacingF = 2
+      else
+        opt_arg@cnMinLevelValF  = 1
+        opt_arg@cnMaxLevelValF  = 15
+        opt_arg@cnLevelSpacingF = 1
+      end if
+      end if
+    end if  
+
+    if(variable_name.eq."T") then
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      if(pressure.le.300) then
+        opt_arg@cnMinLevelValF  = -70
+        opt_arg@cnMaxLevelValF  = -55
+        opt_arg@cnLevelSpacingF = 1
+      else if(pressure.le.500) then
+        opt_arg@cnMinLevelValF  = -34
+        opt_arg@cnMaxLevelValF  = -20
+        opt_arg@cnLevelSpacingF = 1
+      else if(pressure.le.700) then
+        opt_arg@cnMinLevelValF  = -4
+        opt_arg@cnMaxLevelValF  = 14
+        opt_arg@cnLevelSpacingF = 1
+      else if(pressure.le.850) then
+        opt_arg@cnMinLevelValF  = -1
+        opt_arg@cnMaxLevelValF  = 22
+        opt_arg@cnLevelSpacingF = 1
+      else if(pressure.le.925) then
+        opt_arg@cnMinLevelValF  = 2
+        opt_arg@cnMaxLevelValF  = 26
+        opt_arg@cnLevelSpacingF = 2
+      else
+        opt_arg@cnMinLevelValF  = 6
+        opt_arg@cnMaxLevelValF  = 36
+        opt_arg@cnLevelSpacingF = 2
+      end if
+      end if
+      end if
+      end if
+      end if
+    end if  
+
+    if(variable_name.eq."HGT") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = 6
+      opt_arg@cnMaxLevelValF  = 30
+      opt_arg@cnLevelSpacingF = 2
+    end if  
+
+  else
+
+    if(variable_name.eq."PP") then
+      opt_arg@cnRasterModeOn  = True
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = 1
+      opt_arg@cnMaxLevelValF  = 15
+      opt_arg@cnLevelSpacingF = 1
+      opt_arg@cnFillPalette   = "precip2_17lev"
+    end if
+
+    if( any( variable_name .eq. (/"MDBZ","REFL1KM","REFL4KM"/) ) ) then
+      cmap = read_colormap_file("./palettes/radar_new.rgb")
+      opt_arg@cnRasterModeOn  = True
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = -25
+      opt_arg@cnMaxLevelValF  = 70
+      opt_arg@cnLevelSpacingF = 5.0
+      opt_arg@cnFillPalette   = cmap
+    end if
+
+    if(variable_name.eq."Q2") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = 3
+      opt_arg@cnMaxLevelValF  = 16
+      opt_arg@cnLevelSpacingF = 1
+    end if
+
+    if(variable_name.eq."SPD10") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = 1
+      opt_arg@cnMaxLevelValF  = 14
+      opt_arg@cnLevelSpacingF = 1
+    end if
+
+    if(variable_name.eq."T2") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = 6
+      opt_arg@cnMaxLevelValF  = 36
+      opt_arg@cnLevelSpacingF = 2.0
+    end if
+
+    if(variable_name.eq."PSFC") then
+      opt_arg@cnRasterModeOn  = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnMinLevelValF  = 900
+      opt_arg@cnMaxLevelValF  = 1040
+      opt_arg@cnLevelSpacingF = 10
+      ;opt_arg@cnFillPalette   = "MPL_viridis"
+    end if
+
+    if(variable_name.eq."spread") then
+      opt_arg@cnRasterModeOn       = False
+      opt_arg@cnLevelSelectionMode = "AutomaticLevels"
+      opt_arg@cnFillPalette        = "MPL_viridis"
+    end if
+
   end if
-
-  if(variable_name.eq."PP") then
-    opt_arg@cnRasterModeOn  = True
-    opt_arg@cnMinLevelValF  = 1
-    opt_arg@cnMaxLevelValF  = 15
-    opt_arg@cnLevelSpacingF = 1
-    opt_arg@cnFillPalette   = "precip2_17lev"
-  end if
-
-  if(variable_name.eq."PSFC") then
-    opt_arg@cnRasterModeOn  = False
-    opt_arg@cnMinLevelValF  = 900
-    opt_arg@cnMaxLevelValF  = 1040
-    opt_arg@cnLevelSpacingF = 10
-    ;opt_arg@cnFillPalette   = "MPL_viridis"
-  end if
-
-  if(variable_name.eq."Q2") then
-    opt_arg@cnRasterModeOn  = False
-    opt_arg@cnMinLevelValF  = 3
-    opt_arg@cnMaxLevelValF  = 15
-    opt_arg@cnLevelSpacingF = 1
-  end if
-
-  if(variable_name.eq."SPD10") then
-    opt_arg@cnRasterModeOn  = False
-    opt_arg@cnMinLevelValF  = 1
-    opt_arg@cnMaxLevelValF  = 14
-    opt_arg@cnLevelSpacingF = 1
-  end if
-
-  if(variable_name.eq."T2") then
-    opt_arg@cnRasterModeOn  = False
-    opt_arg@cnMinLevelValF  = 6
-    opt_arg@cnMaxLevelValF  = 30
-    opt_arg@cnLevelSpacingF = 2.0
-  end if 
 
 end
 ;--------------------------------------------------------------------------------
@@ -61,48 +213,79 @@ end
 ; Set Resources for labelbar
 ;--------------------------------------------------------------------------------
 undef("labelbar_resources")
-procedure labelbar_resources(variable_name[1]:string, opt_arg[1]:logical)
+procedure labelbar_resources(variable_name[1]:string, pressure[1]:numeric, opt_arg[1]:logical)
 begin
 
-  if(variable_name.eq."MDBZ") then
-    opt_arg@lbTitleString    = "Max Reflectivity (dBZ)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if
+  if(pressure.gt.0) then
 
-  if(variable_name.eq."REFL1KM") then
-    opt_arg@lbTitleString    = "Reflectivity at 1km agl (dBZ)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if
+    if(variable_name.eq."Q") then
+      opt_arg@lbTitleString    = "Water Vapor mixing ratio at " + pressure + " hPa (g/kg)"
+      opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if    
 
-  if(variable_name.eq."REFL4KM") then
-    opt_arg@lbTitleString    = "Reflectivity at 4km agl (dBZ)"
-    opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
-  end if
+    if(variable_name.eq."SPD") then
+      opt_arg@lbTitleString    = "Wind speed at " + pressure + " hPa (m/s)"
+      opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if  
 
-  if(variable_name.eq."PP") then
-    opt_arg@lbTitleString    = "Accumulated Precipitation (mm)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if
+    if(variable_name.eq."T") then
+      opt_arg@lbTitleString    = "Temperature at " + pressure + " hPa (~F34~0~F~C)"
+      opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if  
 
-  if(variable_name.eq."PSFC") then
-    opt_arg@lbTitleString    = "Surface Pressure (hPa)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if
+    if(variable_name.eq."HGT") then
+      opt_arg@lbTitleString    = "Geopotential Height at " + pressure + " hPa (m)"
+      opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if
 
-  if(variable_name.eq."Q2") then
-    opt_arg@lbTitleString    = "2-m Water Vapor mixing ratio (g/kg)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if
+  else
 
-  if(variable_name.eq."SPD10") then
-    opt_arg@lbTitleString    = "Wind speed at 10m (m/s)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if
+    if(variable_name.eq."MDBZ") then
+      opt_arg@lbTitleString    = "Max Reflectivity (dBZ)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
 
-  if(variable_name.eq."T2") then
-    opt_arg@lbTitleString    = "Temperature (~F34~0~F~C)"
-    opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
-  end if 
+    if(variable_name.eq."REFL1KM") then
+      opt_arg@lbTitleString    = "Reflectivity at 1km agl (dBZ)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
+
+    if(variable_name.eq."REFL4KM") then
+      opt_arg@lbTitleString    = "Reflectivity at 4km agl (dBZ)"
+      opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if
+
+    if(variable_name.eq."PP") then
+      opt_arg@lbTitleString    = "Accumulated Precipitation (mm)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
+
+    if(variable_name.eq."PSFC") then
+      opt_arg@lbTitleString    = "Surface Pressure (hPa)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
+
+    if(variable_name.eq."Q2") then
+      opt_arg@lbTitleString    = "2-m Water Vapor mixing ratio (g/kg)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
+
+    if(variable_name.eq."SPD10") then
+      opt_arg@lbTitleString    = "Wind speed at 10m (m/s)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
+
+    if(variable_name.eq."T2") then
+      opt_arg@lbTitleString    = "Temperature (~F34~0~F~C)"
+      opt_arg@lbBoxEndCapStyle = "TriangleHighEnd"
+    end if
+
+    if(variable_name.eq."spread") then
+      opt_arg@lbTitleString    = "Spread"
+      opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if
+
+  end if
 
 end
 ;--------------------------------------------------------------------------------

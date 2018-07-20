@@ -2,26 +2,21 @@ load "ensambleWRF.ncl"
 
 /;
 Genera un unico mapa de un miembro del ensamble
-para una dada variable de superficie
+para una dada variable
 Inputs:
    1. varname:
-      (PP),
-      MDBZ,
-      PSFC,
-      Q2,
-      REFL1KM,
-      REFL4KM,
-      SPD10,
-      T2
+      (PP), MDBZ, REFL1KM, REFL4KM,
+      Q2, SPD10, T2, PSFC
+      Q, SPD, T, HGT
    2. y (year), m (month), d (day), h (hour)
    3. hf (forecast hour):
       hf>=0        -> Forecast file
       hf<0         -> Guess file
       hf undefined -> Analysis file
    4. im (ensamble member)
-   5. BASEDIR (Environment variable)
+   5. iz (vertical level)
+   6. BASEDIR (Environment variable)
 ;/
-
 
 begin
   start_cpu_time = get_cpu_time()
@@ -53,7 +48,7 @@ begin
   else
     fname = fname + "AN"
   end if
-  print("Working with forecast file " + fname)
+  ;print("Working with file " + fname)
 
 ;---Ensamble member
   if(.not.isvar("im")) then
@@ -73,9 +68,23 @@ begin
 ;---Open files using addfiles
   f = addfile(path+fname+".nc","r")
 
+;---Vertical level
+  if( any(varname .eq. (/ "Q", "SPD", "T", "HGT" /) ) ) then
+    if(.not.isvar("iz")) then
+      iz = 0
+      print("iz not defined, assuming " + iz)
+    end if
+    pressure = f->LEV(iz)
+    fname_out = fname+"_single_"+varname+pressure+"hPa"
+  else
+    pressure = -1
+    iz = -1
+    fname_out = fname+"_single_"+varname
+  end if
+
 ;---Open workstation
   wks_type = "png"
-  wks = gsn_open_wks(wks_type,path_out+fname+"_single_"+varname)
+  wks = gsn_open_wks(wks_type,path_out+fname_out)
 
 ;---Set some common resources
   res                       = True
@@ -104,7 +113,7 @@ begin
   con_res@cnInfoLabelOn               = False
 
   con_res@cnLevelSelectionMode        = "ManualLevels"
-  contour_resources(varname,con_res)
+  contour_resources(varname,pressure,con_res)
   
   con_res@lbLabelBarOn                = True
   con_res@lbOrientation               = "Vertical"
@@ -113,37 +122,19 @@ begin
   con_res@lbTitlePosition             = "Right"
   con_res@lbTitleFontHeightF          = 0.02
   con_res@lbLabelFontHeightF          = 0.015
-  labelbar_resources(varname,con_res)
+  labelbar_resources(varname,pressure,con_res)
 
 ;---Section to add polylines to map.
-  lnres                  = True           ; resource list for polylines
-  lnres@gsLineColor      = "gray50"
-  lnres@gsLineThicknessF = 1.0
+  lnres                               = True
+  lnres@gsLineColor                   = "gray50"
+  lnres@gsLineThicknessF              = 1.0
 
 ;---Get variables to be read
-  ;print("Working for variable: " + varname)
-  if(varname.eq."SPD10") then
-    if (getfilevartypes(f,"U10").eq."short") then
-      U10 = short2flt( f->U10 )  
-      V10 = short2flt( f->V10 )  
-    else
-      U10 = f->U10
-      V10 = f->V10
-    end if
-    data = sqrt(U10^2+V10^2)
-  else
-    if (getfilevartypes(f,varname).eq."short") then
-      data = short2flt( f->$varname$ )  
-    else
-      data = f->$varname$
-    end if    
-  end if
+  data = get_NPP_data(f, varname, iz)
+  ;printVarSummary(data)
 
-  if(varname.eq."T2") then
-    data = data - 273.15
-  end if
-
-  print("Working for member " + im)
+;---Plots
+  ;print("Working for member " + im)
   map     = gsn_csm_map(wks,map_res)  
   contour = gsn_csm_contour(wks,data(im,:,:),con_res)
   id      = gsn_add_shapefile_polylines(wks,map,"interprovincial/interprovinciales.shp",lnres)

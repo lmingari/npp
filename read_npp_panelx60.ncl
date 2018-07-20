@@ -2,23 +2,19 @@ load "ensambleWRF.ncl"
 
 /;
 Genera mapas de todos los miembros del ensamble
-para una dada variable de superficie
+para una dada variable
 Inputs:
    1. varname:
-      (PP),
-      MDBZ,
-      PSFC,
-      Q2,
-      REFL1KM,
-      REFL4KM,
-      SPD10,
-      T2
+      (PP), MDBZ, REFL1KM, REFL4KM,
+      Q2, SPD10, T2, PSFC
+      Q, SPD, T, HGT
    2. y (year), m (month), d (day), h (hour)
    3. hf (forecast hour):
       hf>=0        -> Forecast file
       hf<0         -> Guess file
       hf undefined -> Analysis file
-   4. BASEDIR (Environment variable)
+   4. iz (vertical level)
+   5. BASEDIR (Environment variable)
 ;/
 
 begin
@@ -51,7 +47,7 @@ begin
   else
     fname = fname + "AN"
   end if
-  print("Working with forecast file " + fname)
+  ;print("Working with forecast file " + fname)
 
 ;---Root directory
   BASEDIR = getenv("BASEDIR")
@@ -68,11 +64,25 @@ begin
 ;---Open files using addfiles
   f = addfile(path+fname+".nc","r")
 
+;---Vertical level
+  if( any(varname .eq. (/ "Q", "SPD", "T", "HGT" /) ) ) then
+    if(.not.isvar("iz")) then
+      iz = 0
+      print("iz not defined, assuming " + iz)
+    end if
+    pressure = f->LEV(iz)
+    fname_out = fname+"_panelx60_"+varname+pressure+"hPa"
+  else
+    pressure = -1
+    iz = -1
+    fname_out = fname+"_panelx60_"+varname
+  end if
+
 ;---Open workstation
   wks_type = "pdf"
   wks_type@wkPaperHeightF = 40
   wks_type@wkPaperWidthF  = 57
-  wks = gsn_open_wks(wks_type,path_out+fname+"_panelx60_"+varname)
+  wks = gsn_open_wks(wks_type,path_out+fname_out)
 
 ;---Set some common resources
   res                       = True
@@ -102,7 +112,7 @@ begin
 
   con_res@cnLevelSelectionMode        = "ManualLevels"
   con_res@lbLabelBarOn                = False
-  contour_resources(varname,con_res)
+  contour_resources(varname,pressure,con_res)
 
 ;---Panel resources
   pnlres                              = True
@@ -122,31 +132,10 @@ begin
   pnlres@gsnMaximize                  = True
   pnlres@gsnPaperMargin               = 0.1
   pnlres@gsnPaperOrientation          = "portrait"
-
-  labelbar_resources(varname,pnlres)
+  labelbar_resources(varname,pressure,pnlres)
 
 ;---Get variables to be read
-  ;print("Working for variable: " + varname)
-  if(varname.eq."SPD10") then
-    if (getfilevartypes(f,"U10").eq."short") then
-      U10 = short2flt( f->U10 )  
-      V10 = short2flt( f->V10 )  
-    else
-      U10 = f->U10
-      V10 = f->V10
-    end if
-    data = sqrt(U10^2+V10^2)
-  else
-    if (getfilevartypes(f,varname).eq."short") then
-      data = short2flt( f->$varname$ )  
-    else
-      data = f->$varname$
-    end if    
-  end if
-
-  if(varname.eq."T2") then
-    data = data - 273.15
-  end if
+  data = get_NPP_data(f, varname, iz)
 
   dims = dimsizes(data)
   nm   = dims(0)
