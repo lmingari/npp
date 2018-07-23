@@ -7,11 +7,8 @@ from datetime import datetime,timedelta
 #--------------------------- BEGIN USER MODIFICATIONS ---------------------------
 POLL_INTERVAL  = 2                            # seconds between checking status of tasks
 EXEC_STR       = ["ncl", "-Q"]                # -Q option turns off echo of NCL version and copyright info
-NCL_WRITE_CMD  = {'analysis': 'write_npp_analysis.ncl',
-                  'guess':    'write_npp_guess.ncl',
-                  'forecast': 'write_npp_forecast.ncl'
-                 }
-NCL_READ_CMD   = {'read_single':   'read_npp_single.ncl',
+NCL_CMD_fname  = {'write':         'write_npp.ncl',
+                  'read_single':   'read_npp_single.ncl',
                   'read_panelx60': 'read_npp_panelx60.ncl',
                   'read_panelx4':  'read_npp_panelx4.ncl'
                  }
@@ -87,8 +84,13 @@ def get_tasklist(config,block):
     args_list   = []
 
     if block=="write":
-        args_list.append(args_common)
+        total_members = config.getint(block, "total_members")
+        new_args = ['nmembers={}'.format(total_members)]
+        args_list.append(args_common+new_args)
     else:
+        if block=="read_single":
+            member      = config.getint(block, "member")
+            args_common += ['im={}'.format(member)]
         varnames = config.get(block, "variables").split()
         zlevels  = [int(iz) for iz in config.get(block, "vertical_levels").split()]
         for varname in varnames:
@@ -102,10 +104,7 @@ def get_tasklist(config,block):
 
     for file_type in ["analysis","guess","forecast"]:
         if config.getboolean(block,file_type):
-            if block=="write":
-                NCL_CMD = [NCL_WRITE_CMD[file_type]]
-            else:
-                NCL_CMD = [NCL_READ_CMD[block]]
+            NCL_CMD = [NCL_CMD_fname[block]]
             for args in args_list:
                 if file_type=="forecast":
                     for item in datetimeIterator(from_date=t_start, to_date=t_end, delta=dt):

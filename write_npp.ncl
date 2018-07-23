@@ -1,61 +1,112 @@
+/;
+Genera un NPP file incluyendo todos
+los miembros del ensamble
+para un dado tiempo
+Inputs:
+   1. nmembers (member number)
+   2. y (year), m (month), d (day), h (hour)
+   3. hf (forecast hour):
+      hf>=0        -> Forecast file
+      hf<0         -> Guess file
+      hf undefined -> Analysis file
+   4. BASEDIR (Environment variable)
+;/
+
 begin
   start_write_time = get_cpu_time()
 
 ;---NETCDF4 configuration
   NC4       = True
-  NCround   = False
   NCchunk   = True
   NCcompr   = True
   nm_chunck = 1
   nz_chunck = 1
 
-;---Required inputs
+;---Checking for number of members
+  if(.not.isvar("nmembers")) then
+    nmembers = 60
+    print("nmembers not defined, assuming " + nmembers)
+  end if
+  dd = ispan(1,nmembers,1)
+
+;---Root directory
+  BASEDIR = getenv("BASEDIR")
+  if(ismissing(BASEDIR)) then
+    BASEDIR = "/glade/scratch/mdillion/EXP/RRA_02/"
+    print("BASEDIR not defined, assuming: " + BASEDIR)
+  end if
+  path_out = BASEDIR + "POST/NPP/"
+
+;---Checking for datetime
   if(isvar("y") .and. isvar("m") .and. isvar("d") .and. isvar("h")) then
-    hf = -1
-    hf@units = sprinti("hours since %0.4i-", y) + \
-               sprinti("%0.2i-", m) + \
-               sprinti("%0.2i ", d) + \
-               sprinti("%0.2i:00:00", h) 
+    if(isvar("hf")) then
+      hf@units    = sprinti("hours since %0.4i-", y) + \
+                    sprinti("%0.2i-", m) + \
+                    sprinti("%0.2i ", d) + \
+                    sprinti("%0.2i:00:00", h)
+      if(hf.lt.0) then
+        ;---Guess File
+        fname_out = sprinti("NPP_%0.4i-", y) + \
+                    sprinti("%0.2i-", m) + \
+                    sprinti("%0.2i_", d) + \
+                    sprinti("%0.2i_GS.nc", h)
+        hf        = -1
+        fdate     = ut_calendar(hf, 0)
+        y_start   = tointeger(fdate(:,0))
+        m_start   = tointeger(fdate(:,1))
+        d_start   = tointeger(fdate(:,2))
+        h_start   = tointeger(fdate(:,3))
+        y_end     = y
+        m_end     = m
+        d_end     = d
+        h_end     = h
+      else
+        ;---Forecast File
+        fname_out = sprinti("NPP_%0.4i-", y) + \
+                    sprinti("%0.2i-", m) + \
+                    sprinti("%0.2i_", d) + \
+                    sprinti("%0.2i_", h) + \
+                    sprinti("FC%0.2i.nc", hf)
+        y_start   = y
+        m_start   = m
+        d_start   = d
+        h_start   = h
+        fdate     = ut_calendar(hf, 0)
+        y_end     = tointeger(fdate(:,0))
+        m_end     = tointeger(fdate(:,1))
+        d_end     = tointeger(fdate(:,2))
+        h_end     = tointeger(fdate(:,3))
+      end if
+      path_in   = sprinti("%0.4i", y_start) + \
+                  sprinti("%0.2i", m_start) + \
+                  sprinti("%0.2i_", d_start) + \
+                  sprinti("%0.2i/", h_start)
+      fname_in  = "wrfout_d01_" + \
+                  sprinti("%0.4i-", y_end) + \
+                  sprinti("%0.2i-", m_end) + \
+                  sprinti("%0.2i_", d_end) + \
+                  sprinti("%0.2i:00:00", h_end)
+      files     = BASEDIR + "FCST/" + \
+                  path_in + \
+                  sprinti("%0.2i/", dd) + \
+                  fname_in
+    else
+      fname_out = sprinti("NPP_%0.4i-", y) + \
+                  sprinti("%0.2i-", m) + \
+                  sprinti("%0.2i_", d) + \
+                  sprinti("%0.2i_AN.nc", h)
+      path_in   = sprinti("%0.4i-", y) + \
+                  sprinti("%0.2i-", m) + \
+                  sprinti("%0.2i_", d) + \
+                  sprinti("%0.2i_00_00/", h)
+      files     = BASEDIR + "ANA/" + \
+                  path_in + \
+                  sprinti("anal%0.5i", dd)
+    end if
   else
     print("Required input: y, m, d, h. Closing...")
     exit()
   end if
-
-  BASEDIR = getenv("BASEDIR")
-  if(ismissing(BASEDIR)) then
-    BASEDIR = "/glade/scratch/mdillion/EXP/RRA_02/"
-;    print("BASEDIR not defined, assuming: " + BASEDIR)
-  end if
-
-  fdate = ut_calendar(hf, 0)
-  y2    = tointeger(fdate(:,0))
-  m2    = tointeger(fdate(:,1))
-  d2    = tointeger(fdate(:,2))
-  h2    = tointeger(fdate(:,3))
-
-  path_in   = sprinti("%0.4i", y2) + \
-              sprinti("%0.2i", m2) + \
-              sprinti("%0.2i_", d2) + \
-              sprinti("%0.2i/", h2)
-  fname_in  = "wrfout_d01_" + \
-              sprinti("%0.4i-", y) + \
-              sprinti("%0.2i-", m) + \
-              sprinti("%0.2i_", d) + \
-              sprinti("%0.2i:00:00", h)
-
-  path_out  = BASEDIR+"POST/NPP/"
-  fname_out = sprinti("NPP_%0.4i-", y) + \
-              sprinti("%0.2i-", m) + \
-              sprinti("%0.2i_", d) + \
-              sprinti("%0.2i_GS.nc", h)
-
-;---List of WRF output files
-  nfiles    = 60
-  dd        = ispan(1,nfiles,1)  
-  files     = BASEDIR + "FCST/" + \
-              path_in + \
-              sprinti("%0.2i/", dd) + \
-              fname_in
 
 ;---Open files using addfiles
   f         = addfiles(files,"r")
@@ -90,8 +141,8 @@ begin
 
 ;---Vertical interpolation
   opts              = True
-  opts@logP         = True 
-  opts@extrapolate  = True 
+  opts@logP         = True
+  opts@extrapolate  = True
   opts@field_type   = "none"
 
   vert_coord = "pressure"
@@ -133,7 +184,7 @@ begin
   delete_VarAtts(U10, -1)
   U10@long_name   = "10-m x-wind component"
   U10@unit        = "m s-1"
-  
+
   delete_VarAtts(V10, -1)
   V10@long_name   = "10-m y-wind component"
   V10@unit        = "m s-1"
@@ -145,7 +196,7 @@ begin
   rmAtts = (/"FieldType","MemoryOrder",\
              "description","units",\
              "stagger","coordinates"/)
-  
+
   delete_VarAtts(U_intrp, rmAtts)
   U_intrp@long_name   = "x-wind component"
   U_intrp@unit        = "m s-1"
@@ -173,7 +224,7 @@ begin
   REFL1KM@long_name   = "Reflectivity at 1km agl"
   REFL1KM@unit        = "dBZ"
 
-  REFL4KM             = REFL(:,1,:,:)  
+  REFL4KM             = REFL(:,1,:,:)
   REFL4KM@long_name   = "Reflectivity at 4km agl"
   REFL4KM@unit        = "dBZ"
 
@@ -181,54 +232,6 @@ begin
   delete_VarAtts(MDBZ, rmAtts)
   MDBZ@long_name      = "Max Reflectivity"
   MDBZ@unit           = "dBZ"
-
-  if(NC4 .and. NCround) then
-    bin_exp = 16
-    scale   = 2^bin_exp
-    dec_exp = toshort(floor(bin_exp*0.30103))
-
-    PSFC@least_significant_digit = dec_exp
-    PSFC = round(PSFC*scale,0)/scale
-    
-    T2@least_significant_digit = dec_exp
-    T2 = round(T2*scale,0)/scale
-
-    Q2@least_significant_digit = dec_exp
-    Q2 = round(Q2*scale,0)/scale
-
-    U10@least_significant_digit = dec_exp
-    U10 = round(U10*scale,0)/scale
-    
-    V10@least_significant_digit = dec_exp
-    V10 = round(V10*scale,0)/scale
-    
-    PP@least_significant_digit = dec_exp
-    PP = round(PP*scale,0)/scale
-
-    REFL1KM@least_significant_digit = dec_exp
-    REFL1KM = round(REFL1KM*scale,0)/scale
-
-    REFL4KM@least_significant_digit = dec_exp
-    REFL4KM = round(REFL4KM*scale,0)/scale
-
-    MDBZ@least_significant_digit = dec_exp
-    MDBZ = round(MDBZ*scale,0)/scale
-
-    U_intrp@least_significant_digit = dec_exp
-    U_intrp = round(U_intrp*scale,0)/scale
-
-    V_intrp@least_significant_digit = dec_exp
-    V_intrp = round(V_intrp*scale,0)/scale
-
-    T_intrp@least_significant_digit = dec_exp
-    T_intrp = round(T_intrp*scale,0)/scale
-
-    Q_intrp@least_significant_digit = dec_exp
-    Q_intrp = round(Q_intrp*scale,0)/scale
-
-    G_intrp@least_significant_digit = dec_exp
-    G_intrp = round(G_intrp*scale,0)/scale
-  end if
 
 ;===================================================================
 ;---Create a new NetCDF file
@@ -244,10 +247,10 @@ begin
   else
     setfileoption("nc","Format","64BitOffset")
   end if
- 
+
 ;---Open a new NetCDF file to write to
-  system("rm -f " + path_out+fname_out)
-  fout = addfile(path_out+fname_out,"c")
+  system("rm -f " + path_out + fname_out)
+  fout = addfile(path_out + fname_out,"c")
 
 ;---Define the dimension names and their sizes on the file
   dims           = dimsizes(U_intrp)
@@ -284,9 +287,14 @@ begin
   fAtt@CEN_LON       = f[0]@CEN_LON
   fAtt@TRUELAT1      = f[0]@TRUELAT1
   fAtt@TRUELAT2      = f[0]@TRUELAT2
-  fAtt@FORECAST_HOUR = 1
-  fAtt@FORECAST      = True
-  fAtt@ANALYSIS      = False
+  if(isvar("hf")) then
+    fAtt@FORECAST_HOUR = abs(hf)
+    fAtt@FORECAST      = True
+    fAtt@ANALYSIS      = False
+  else
+    fAtt@FORECAST      = False
+    fAtt@ANALYSIS      = True
+  end if
   fAtt@START_DATE    = f[0]@START_DATE
   fAtt@title         = "NCL PostProcessing for WRF-ARW Ensemble"
   fileattdef(fout,fAtt)
