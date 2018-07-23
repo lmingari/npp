@@ -1,16 +1,56 @@
+load "ensambleWRF.ncl"
+
+/;
+Calcula la probabilidad de superar un dado
+valor umbral y genera un mapa
+Inputs:
+   1. varname:
+      (PP), MDBZ, REFL1KM, REFL4KM,
+      Q2, SPD10, T2, PSFC
+      Q, SPD, T, HGT
+   2. y (year), m (month), d (day), h (hour)
+   3. hf (forecast hour):
+      hf>=0        -> Forecast file
+      hf<0         -> Guess file
+      hf undefined -> Analysis file
+   4. threshold
+   5. iz (vertical level)
+   6. BASEDIR (Environment variable)
+;/
+
 begin
   start_cpu_time = get_cpu_time()
 
-;----------------------------------------------------------
-;---Calcula la probabilidad de que la precipitación 
-;---acumulada supere un dado valor umbral
-;---Inputs:
-;---1. threshold
-;---2. BASEDIR
-;---3. fname
-;----------------------------------------------------------
+;---Variable Name
+  if(.not.isvar("varname")) then
+    varname = "PP"
+    print("varname not defined, assuming " + varname)
+  end if
 
-;---Precipitation threshold (mm)
+;---Filename 
+  if(isvar("y") .and. isvar("m") .and. isvar("d") .and. isvar("h")) then
+    fname = sprinti("NPP_%0.4i-", y) + \
+            sprinti("%0.2i-", m) + \
+            sprinti("%0.2i_", d) + \
+            sprinti("%0.2i_", h) 
+  else
+    print("Required input: y, m, d, h. Closing...")
+    exit()
+  end if
+
+;---Checking for forecast hour
+  if(isvar("hf")) then
+    if(hf.ge.0) then
+      fname = fname + sprinti("FC%0.2i", hf)
+    else
+      fname = fname + "GS"
+    end if
+  else
+    fname = fname + "AN"
+  end if
+  ;print("Working with file " + fname)
+
+;---Threshold
   if(.not.isvar("threshold")) then
     threshold = 50
     print("threshold not defined, assuming " + threshold)
@@ -20,28 +60,31 @@ begin
   BASEDIR = getenv("BASEDIR")
   if(ismissing(BASEDIR)) then
     BASEDIR = "/glade/scratch/mdillion/EXP/RRA_02/"
-    print("BASEDIR not defined, assuming: " + BASEDIR)
+;    print("BASEDIR not defined, assuming: " + BASEDIR)
   end if
   path     = BASEDIR + "POST/NPP/"
   path_out = BASEDIR + "POST/PLOT/"
 
-;---NPP output file
-  if(.not.isvar("fname")) then
-    fname = "npp_out"
-    print("fname not defined, assuming " + fname)
-  end if
-
-;---Variable Name
-  varname = "PP"
-
 ;---Open files using addfiles
   f = addfile(path+fname+".nc","r")
 
+;---Vertical level
+  if( any(varname .eq. (/ "Q", "SPD", "T", "HGT" /) ) ) then
+    if(.not.isvar("iz")) then
+      iz = 0
+      print("iz not defined, assuming " + iz)
+    end if
+    pressure = f->LEV(iz)
+    fname_out = fname+"_probability"+threshold+"_"+varname+pressure+"hPa"
+  else
+    pressure = -1
+    iz = -1
+    fname_out = fname+"_probability"+threshold+"_"+varname
+  end if
+
 ;---Open workstation
   wks_type = "png"
-  wks_type@wkHeight = 1024
-  wks_type@wkWidth  = 900
-  wks = gsn_open_wks(wks_type,path_out+fname+"_"+varname+"_th"+threshold)
+  wks = gsn_open_wks(wks_type,path_out+fname_out)
 
 ;---Set some common resources
   res                       = True
@@ -61,57 +104,7 @@ begin
   map_res@gsnDraw           = False
   map_res@gsnFrame          = False
   map_res@gsnMaximize       = True
-
-;---Set map resources based on projection on NPP output file
-  map_res@mpProjection                = "LambertConformal"
-  map_res@mpLambertParallel1F         = f@TRUELAT1
-  map_res@mpLambertParallel2F         = f@TRUELAT2
-  map_res@mpLambertMeridianF          = f@STAND_LON
-  map_res@mpLimitMode                 = "Corners"
-  map_res@mpLeftCornerLatF            = f@start_lat
-  map_res@mpLeftCornerLonF            = f@start_lon
-  map_res@mpRightCornerLatF           = f@end_lat
-  map_res@mpRightCornerLonF           = f@end_lon
-
-;---Map resources
-  map_res@mpFillOn                    = False
-  map_res@mpOutlineOn                 = True
-  map_res@mpDataBaseVersion           = "MediumRes"
-  map_res@mpDataSetName               = "Earth..4"
-  map_res@mpOutlineDrawOrder          = "PostDraw"
-
-  map_res@mpOutlineBoundarySets       = "National"
-  map_res@mpNationalLineColor         = "Black"
-  map_res@mpGeophysicalLineColor      = "Black"
-  map_res@mpNationalLineThicknessF    = 2.0
-  map_res@mpGeophysicalLineThicknessF = 2.0
-  ;map_res@mpMaskOutlineSpecifiers     = "Argentina"
-  
-  map_res@tmXBLabelFontHeightF        = 0.012
-  map_res@tmXTLabelFontHeightF        = 0.012
-  map_res@tmYLLabelFontHeightF        = 0.012
-  map_res@tmYRLabelFontHeightF        = 0.012
-  map_res@tmYRLabelJust               = "CenterCenter"  
-  map_res@tmYLLabelJust               = "CenterCenter"
-  map_res@tmYRLabelAngleF             = 90
-  map_res@tmYLLabelAngleF             = 90
-  
-  map_res@tmBorderThicknessF          = 1.2
-  map_res@tmXBMajorThicknessF         = 1.2
-  map_res@tmXTMajorThicknessF         = 1.2
-  map_res@tmYRMajorThicknessF         = 1.2
-  map_res@tmYLMajorThicknessF         = 1.2
-
-  map_res@pmTickMarkDisplayMode       = "Always"
-
-  map_res@tiMainString                = "Ensemble Probability of Exceedance"
-  map_res@gsnCenterString             = "6-h Accumulated Precipitation > " + threshold + " mm"
-;  map_res@tiMainFontHeightF           = 0.015
-  map_res@gsnCenterStringFontHeightF  = 0.015
-
-;---Color Palette
-;  cmap = read_colormap_file("MPL_RdYlBu")
-;  cmap = cmap(::-1,:) ; reverse the color map 
+  map_resourcesx1(f,map_res)
 
 ;---CONTOUR filled contour plot
   con_res                             = res
@@ -119,49 +112,32 @@ begin
   con_res@cnLinesOn                   = False
   con_res@cnLineLabelsOn              = False
   con_res@cnInfoLabelOn               = False
-  con_res@cnRasterModeOn              = False
-
-  con_res@cnLevelSelectionMode        = "ManualLevels"
-  con_res@cnMinLevelValF              = 10
-  con_res@cnMaxLevelValF              = 90
-  con_res@cnLevelSpacingF             = 10
-  ; con_res@cnFillPalette               = "precip2_17lev"
-  con_res@cnFillPalette               = "WhiteBlue"
+  contour_resources("probability",-1,con_res)
 
   con_res@lbLabelBarOn                = True
   con_res@lbOrientation               = "Vertical"
-  ; con_res@lbTitlePosition             = "Right"
-  ; con_res@lbTitleDirection            = "Across"
-  ; con_res@lbTitleAngleF               = 90. 
-  con_res@lbTitleString               = "[%]"
   con_res@lbTitleFontHeightF          = 0.018
   con_res@lbLabelFontHeightF          = 0.018
-  ; con_res@lbBoxEndCapStyle            = "TriangleBothEnds"
-
-  ; con_res@pmLabelBarWidthF             = 0.35
-  ; con_res@pmLabelBarHeightF            = 0.07
-  ; con_res@pmLabelBarOrthogonalPosF     = -0.02
+  labelbar_resources("probability",-1,con_res)
 
 ;---Section to add polylines to map.
-  lnres                  = True           ; resource list for polylines
-  lnres@gsLineColor      = "gray50"
-  lnres@gsLineThicknessF = 1.0
+  lnres                               = True
+  lnres@gsLineColor                   = "gray50"
+  lnres@gsLineThicknessF              = 1.0
 
 ;---Get variables to be read
-  print("Working for variable: " + varname)
-  if (getfilevartypes(f,varname).eq."short") then
-    data = short2flt( f->$varname$ )
-  else
-    data = f->$varname$
-  end if
+  data    = get_NPP_data(f, varname, iz)
 
   dims    = dimsizes(data)
   nm      = dims(0)
   ny      = dims(1)
   nx      = dims(2)
-  ; nm      = 60
 
-  proba = 100.0*dim_num_n(data.ge.threshold,0)/nm
+  proba   = 100.0*dim_num_n(data.ge.threshold,0)/nm
+
+  map_res@tiMainString = "Ensemble Probability of Exceedance"
+  map_res@gsnCenterString = data@long_name + "~F34~3~F21~" + threshold + data@unit
+  map_res@gsnCenterStringFontHeightF = 0.015
 
   map     = gsn_csm_map(wks,map_res)  
   contour = gsn_csm_contour(wks,proba,con_res)

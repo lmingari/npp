@@ -204,6 +204,15 @@ begin
       opt_arg@cnFillPalette        = "MPL_viridis"
     end if
 
+    if(variable_name.eq."probability") then
+      opt_arg@cnRasterModeOn       = False
+      opt_arg@cnLevelSelectionMode = "ManualLevels"
+      opt_arg@cnFillPalette        = "WhiteBlue"
+      opt_arg@cnMinLevelValF       = 10
+      opt_arg@cnMaxLevelValF       = 90
+      opt_arg@cnLevelSpacingF      = 10
+    end if
+
   end if
 
 end
@@ -283,6 +292,10 @@ begin
     if(variable_name.eq."spread") then
       opt_arg@lbTitleString    = "Spread"
       opt_arg@lbBoxEndCapStyle = "TriangleBothEnds"
+    end if
+
+    if(variable_name.eq."probability") then
+      opt_arg@lbTitleString    = "[%]"
     end if
 
   end if

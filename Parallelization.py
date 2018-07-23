@@ -7,10 +7,11 @@ from datetime import datetime,timedelta
 #--------------------------- BEGIN USER MODIFICATIONS ---------------------------
 POLL_INTERVAL  = 2                            # seconds between checking status of tasks
 EXEC_STR       = ["ncl", "-Q"]                # -Q option turns off echo of NCL version and copyright info
-NCL_CMD_fname  = {'write':         'write_npp.ncl',
-                  'read_single':   'read_npp_single.ncl',
-                  'read_panelx60': 'read_npp_panelx60.ncl',
-                  'read_panelx4':  'read_npp_panelx4.ncl'
+NCL_CMD_fname  = {'write':            'write_npp.ncl',
+                  'read_single':      'read_npp_single.ncl',
+                  'read_panelx60':    'read_npp_panelx60.ncl',
+                  'read_panelx4':     'read_npp_panelx4.ncl',
+                  'read_probability': 'read_npp_probability.ncl',
                  }
 #--------------------------- END USER MODIFICATIONS -----------------------------
 
@@ -91,10 +92,13 @@ def get_tasklist(config,block):
         if block=="read_single":
             member      = config.getint(block, "member")
             args_common += ['im={}'.format(member)]
+        elif block=="read_probability":
+            threshold = config.getint(block, "threshold")
+            args_common += ['threshold={}'.format(threshold)]
         varnames = config.get(block, "variables").split()
-        zlevels  = [int(iz) for iz in config.get(block, "vertical_levels").split()]
         for varname in varnames:
             if varname in ["T","Q","SPD","HGT"]:
+                zlevels  = [int(iz) for iz in config.get(block, "vertical_levels").split()]
                 for iz in zlevels:
                     new_args = ['varname="{}"'.format(varname),"iz={}".format(iz)]
                     args_list.append(args_common+new_args)

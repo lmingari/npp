@@ -38,6 +38,9 @@ scripts += get_tasklist(config,block)
 block   = "read_panelx4"
 scripts += get_tasklist(config,block)
 
+block   = "read_probability"
+scripts += get_tasklist(config,block)
+
 if scripts:
   print "Running read scripts"
   for item in scripts: print item
